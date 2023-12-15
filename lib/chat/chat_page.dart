@@ -1,4 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:rfw/formats.dart';
+import 'package:rfw/rfw.dart';
+
+enum ChatDataItemType {
+  chat,
+  interactive
+}
+
+class ChatDataItem {
+  final ChatDataItemType type;
+  final String content;
+
+  ChatDataItem({required this.type, required this.content});
+}
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -50,13 +64,15 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  List<ChatDataItem> chatData = [];
+
   Widget body() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Container(
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
                 border: Border.all(color: Colors.black12, width: 1), borderRadius: BorderRadius.circular(15)),
@@ -74,15 +90,43 @@ class _ChatPageState extends State<ChatPage> {
               ],
             ),
           ),
-          ListView.builder(
-            physics: const NeverScrollableScrollPhysics(),
+        ),
+        const SizedBox(
+          height: 24,
+        ),
+        Expanded(
+          child: ListView.builder(
+            physics: const ClampingScrollPhysics(),
             shrinkWrap: true,
-            itemCount: 5,
+            itemCount: chatData.length,
             itemBuilder: (context, index) {
-              return chatItem('message');
+              var item = chatData[index];
+              if(item.type == ChatDataItemType.chat){
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: chatItem(item.content),
+              );
+              }
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Container(
+                  height: 232,
+                    padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                color: Colors.black12,
+                borderRadius: BorderRadius.circular(26),
+                ),
+                child: ChatItemInteractive(),
+                ),
+              );
             },
           ),
-          Container(
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
             padding: const EdgeInsets.all(16),
             margin: const EdgeInsets.only(bottom: 24),
             decoration: BoxDecoration(
@@ -99,7 +143,9 @@ class _ChatPageState extends State<ChatPage> {
                           scrollPadding: EdgeInsets.zero,
                           onChanged: (value) {},
                           autofocus: false,
-                          onSaved: (value) {},
+                          onSaved: (value) {
+                            sendChat();
+                          },
                           decoration: const InputDecoration(
                             filled: false,
                             border: InputBorder.none,
@@ -112,9 +158,12 @@ class _ChatPageState extends State<ChatPage> {
                           style: const TextStyle(fontSize: 14, color: Colors.black, fontWeight: FontWeight.w400),
                         ),
                       ),
-                      const Icon(
-                        Icons.send,
-                        size: 24,
+                      GestureDetector(
+                        onTap: sendChat,
+                        child: const Icon(
+                          Icons.send,
+                          size: 24,
+                        ),
                       ),
                     ],
                   ),
@@ -122,10 +171,21 @@ class _ChatPageState extends State<ChatPage> {
               ],
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(
+          height: 32,
+        )
+      ],
     );
   }
+
+  void sendChat(){
+    setState(() {
+      bool isNotEmpty = _controllerMessage.text.isNotEmpty;
+      chatData.add(ChatDataItem(type: isNotEmpty ? ChatDataItemType.chat : ChatDataItemType.interactive, content: _controllerMessage.text));
+    });
+  }
+
 
   Widget chatItem(String message) {
     return GestureDetector(
@@ -141,7 +201,114 @@ class _ChatPageState extends State<ChatPage> {
               message,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.w400),
+              style: const TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.w400),
             )));
+  }
+}
+
+class ChatItemInteractive extends StatefulWidget {
+  const ChatItemInteractive({super.key});
+
+  @override
+  State<ChatItemInteractive> createState() => _ChatItemInteractiveState();
+}
+
+class _ChatItemInteractiveState extends State<ChatItemInteractive> {
+  final Runtime _runtime = Runtime();
+  final DynamicContent _data = DynamicContent();
+
+  static const LibraryName coreName = LibraryName(<String>['core', 'widgets']);
+
+  static final RemoteWidgetLibrary _remoteWidgets = parseLibraryFile('''
+     import local;
+      widget root = ListWidget(
+  children: [
+    CardUser(
+      title: "Lara",
+      subtitle: "Perda de Peso: 6 kg",
+      trailing: "12%",
+      imgUrl: "{url_lara}",
+    ),
+    CardUser(
+      title: "Carlos",
+      subtitle: "Perda de Peso: 4 kg",
+      trailing: "5%",
+      imgUrl: "{url_carlos}",
+    ),
+    CardUser(
+      title: "Camila",
+      subtitle: "Perda de Peso: 5 kg",
+      trailing: "7%",
+      imgUrl: "{url_camila}",
+    ),
+  ],
+);
+  ''');
+  static const LibraryName mainName = LibraryName(<String>['main']);
+  final String urlImage = 'https://professordoiphone.com.br/wp-content/uploads/2019/07/file_0-41.jpg';
+
+  static WidgetLibrary _createLocalWidgets() {
+    return LocalWidgetLibrary(<String, LocalWidgetBuilder>{
+      'ListWidget': (BuildContext context, DataSource source) {
+        return ListView(
+          children: source.childList(["children"]),
+        );
+      },
+      'TextWidget': (BuildContext context, DataSource source) {
+        return Center(
+          child: Text(
+            'Hello, ${source.v<String>(<Object>["name"])}!',
+            textDirection: TextDirection.ltr,
+          ),
+        );
+      },
+      'CardUser': (BuildContext context, DataSource source) {
+        var title = source.v<String>(<Object>["title"]);
+        var subtitle = source.v<String>(<Object>["subtitle"]);
+        var trailing = source.v<String>(<Object>["trailing"]);
+        var url = source.v<String>(<Object>["imgUrl"]);
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4.0),
+          child: Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundImage: url != null ? NetworkImage(url) : null,
+              ),
+              title: Text(title!),
+              subtitle: Text(subtitle!),
+              trailing: Text(trailing!),
+            ),
+          ),
+        );
+      },
+    });
+  }
+  static const LibraryName localName = LibraryName(<String>['local']);
+  @override
+  void initState() {
+    super.initState();
+    // Local widget library:
+    _runtime.update(localName, _createLocalWidgets());
+    // Remote widget library:
+    _runtime.update(mainName, _remoteWidgets);
+    // Configuration data:
+    _data.update('greet', <String, Object>{'name': 'World'});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return
+
+      RemoteWidget(
+        runtime: _runtime,
+        data: _data,
+        widget: const FullyQualifiedWidgetName(mainName, 'root'),
+        onEvent: (String name, DynamicMap arguments) {
+          // The example above does not have any way to trigger events, but if it
+          // did, they would result in this callback being invoked.
+          debugPrint('user triggered event "$name" with data: $arguments');
+        },
+      );
   }
 }
